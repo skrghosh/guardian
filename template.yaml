@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Guardian - Serverless Security Runbook Automation
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.12
+    Environment:
+      Variables:
+        RUNBOOKS_BUCKET: !Ref RunbooksBucket
+        AUDIT_TABLE: !Ref AuditTable
+        SNS_TOPIC_ARN: !Ref NotificationTopic
+
+Resources:
+  GuardianFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.dispatcher
+      CodeUri: src/
+      Events:
+        PublicS3BucketEvent:
+          Type: CloudWatchEvent
+          Properties:
+            Pattern:
+              source: ["aws.s3"]
+              detail:
+                eventName: ["PutBucketAcl", "PutBucketPublicAccessBlock"]
+        SuspiciousIamEvent:
+          Type: CloudWatchEvent
+          Properties:
+            Pattern:
+              source: ["aws.iam"]
+              detail:
+                eventName: ["CreateUser", "UpdateLoginProfile", "AttachUserPolicy"]
+        SimulateApi:
+          Type: Api
+          Properties:
+            Path: /simulate
+            Method: post
+      Policies:
+        - S3GetObjectPolicy:
+            BucketName: !Ref RunbooksBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditTable
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref NotificationTopic
+        - Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutBucketPublicAccessBlock
+              - s3:PutBucketAcl
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - iam:UpdateUser
+              - iam:DeleteLoginProfile
+              - iam:DisableUser
+              - sts:GetCallerIdentity
+            Resource: "*"
+
+  RunbooksBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub guardian-runbooks-${AWS::AccountId}
+
+  AuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub guardian-audit-${AWS::AccountId}
+      AttributeDefinitions:
+        - AttributeName: RunbookId
+          AttributeType: S
+        - AttributeName: Timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: RunbookId
+          KeyType: HASH
+        - AttributeName: Timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ExpireAt
+        Enabled: true
+
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub guardian-notifications-${AWS::AccountId}
+
+Outputs:
+  ApiUrl:
+    Description: "Simulate API endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/simulate"
