@@ -44,22 +44,21 @@ Resources:
             BucketName: !Ref RunbooksBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref AuditTable
-        - SNSPublishMessagePolicy:
-            TopicName: !Ref NotificationTopic
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
               Action:
                 - s3:PutBucketPublicAccessBlock
                 - s3:PutBucketAcl
-              Resource: "*"
+                - sns:Publish
+              Resource: '*'
             - Effect: Allow
               Action:
                 - iam:UpdateUser
                 - iam:DeleteLoginProfile
                 - iam:DisableUser
                 - sts:GetCallerIdentity
-              Resource: "*"
+              Resource: '*'
 
   RunbooksBucket:
     Type: AWS::S3::Bucket
