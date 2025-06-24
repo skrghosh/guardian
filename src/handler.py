@@ -49,7 +49,8 @@ def dispatcher(event, context):
         return respond(500, {'status': 'error', 'message': str(e)})
 
     # Execute playbook steps
-    results = execute_runbook(runbook, detail)
+        # Execute playbook steps
+    results = execute_runbook(runbook, payload if 'body' in event and isinstance(event['body'], str) else event)
     audit_runbook(runbook_key, event, results)
     return respond(200, {'status': 'completed', 'results': results})
 
@@ -60,7 +61,7 @@ def execute_runbook(steps, detail):
         name = step.get('name')
         action = step.get('action')
         raw_params = step.get('params', {})
-        params = substitute_params(raw_params, detail)
+        params = substitute_params(raw_params, event)
 
         service, method = action.split('.', 1)
         client = boto3.client(service)
