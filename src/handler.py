@@ -22,11 +22,20 @@ RUNBOOK_MAP = {
 }
 
 def dispatcher(event, context):
-    detail = event.get('detail', {})
+    # Support API Gateway proxy: parse JSON body if present
+    if 'body' in event and isinstance(event['body'], str):
+        try:
+            payload = json.loads(event['body'])
+        except json.JSONDecodeError as e:
+            return respond(400, {'status': 'error', 'message': 'Invalid JSON body'})
+        detail = payload.get('detail', {})
+    else:
+        detail = event.get('detail', {})
+
     event_name = detail.get('eventName')
     runbook_key = RUNBOOK_MAP.get(event_name)
     if not runbook_key:
-        print(f"No matching runbook for eventName {event_name}")
+        print(f"No matching runbook for eventName: {event_name}")
         return respond(200, {'status': 'no-op'})
 
     # Load runbook YAML from S3
@@ -57,7 +66,7 @@ def execute_runbook(steps, detail):
         client = boto3.client(service)
         try:
             func = getattr(client, method)
-            resp = func(**params)
+            func(**params)
             results.append({'step': name, 'status': 'success'})
         except ClientError as e:
             results.append({'step': name, 'status': 'error', 'error': str(e)})
