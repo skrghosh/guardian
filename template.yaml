@@ -40,25 +40,26 @@ Resources:
             Path: /simulate
             Method: post
       Policies:
-        - S3GetObjectPolicy:
+        - S3ReadPolicy:
             BucketName: !Ref RunbooksBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref AuditTable
         - SNSPublishMessagePolicy:
             TopicName: !Ref NotificationTopic
-        - Statement:
-          - Effect: Allow
-            Action:
-              - s3:PutBucketPublicAccessBlock
-              - s3:PutBucketAcl
-            Resource: "*"
-          - Effect: Allow
-            Action:
-              - iam:UpdateUser
-              - iam:DeleteLoginProfile
-              - iam:DisableUser
-              - sts:GetCallerIdentity
-            Resource: "*"
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutBucketPublicAccessBlock
+                - s3:PutBucketAcl
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - iam:UpdateUser
+                - iam:DeleteLoginProfile
+                - iam:DisableUser
+                - sts:GetCallerIdentity
+              Resource: "*"
 
   RunbooksBucket:
     Type: AWS::S3::Bucket
