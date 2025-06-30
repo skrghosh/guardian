@@ -69,13 +69,24 @@ def execute_runbook(steps, event_data):
             func = getattr(client, method)
             func(**params)
             results.append({'step': name, 'status': 'success'})
+
         except ClientError as e:
+            code = e.response['Error']['Code']
+            # Treat missing login-profile as a non-fatal no-op
+            if method == 'delete_login_profile' and code == 'NoSuchEntity':
+                results.append({'step': name, 'status': 'no-op'})
+                continue
+
+            # Otherwise record error and stop
             results.append({'step': name, 'status': 'error', 'error': str(e)})
             break
+
         except AttributeError as e:
             results.append({'step': name, 'status': 'error', 'error': str(e)})
             break
+
     return results
+
 
 
 def substitute_params(obj, event_data):
