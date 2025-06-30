@@ -48,14 +48,17 @@ Resources:
           Statement:
             - Effect: Allow
               Action:
-                - s3:PutBucketPublicAccessBlock
-                - s3:PutBucketAcl
+                - s3:PutPublicAccessBlock
                 - sns:Publish
               Resource: '*'
             - Effect: Allow
               Action:
-                - iam:UpdateUser
+                - s3:PutBucketAcl
+            - Effect: Allow
+              Action:
                 - iam:DeleteLoginProfile
+                - iam:DetachUserPolicy      # Added for runbook
+                - iam:UpdateUser
                 - iam:DisableUser
                 - sts:GetCallerIdentity
               Resource: '*'
