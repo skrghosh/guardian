@@ -1,0 +1,16 @@
+- name: disable-login-profile
+  action: iam.delete_login_profile
+  params:
+    UserName: "{{ detail.requestParameters.userName }}"
+
+- name: revoke-policy
+  action: iam.detach_user_policy
+  params:
+    UserName: "{{ detail.requestParameters.userName }}"
+    PolicyArn: "{{ detail.requestParameters.policyArn }}"
+
+- name: notify
+  action: sns.publish
+  params:
+    TopicArn: "{{ env.SNS_TOPIC_ARN }}"
+    Message: "Guardian disabled IAM user {{ detail.requestParameters.userName }} due to suspicious activity"
