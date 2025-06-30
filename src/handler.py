@@ -22,16 +22,17 @@ RUNBOOK_MAP = {
 }
 
 def dispatcher(event, context):
-    # Support API Gateway proxy: parse JSON body if present
+    # Parse JSON body if present (API Gateway proxy)
     if 'body' in event and isinstance(event['body'], str):
         try:
-            payload = json.loads(event['body'])
-        except json.JSONDecodeError as e:
+            event_data = json.loads(event['body'])
+        except json.JSONDecodeError:
             return respond(400, {'status': 'error', 'message': 'Invalid JSON body'})
-        detail = payload.get('detail', {})
     else:
-        detail = event.get('detail', {})
+        event_data = event
 
+    # Lookup runbook
+    detail = event_data.get('detail', {})
     event_name = detail.get('eventName')
     runbook_key = RUNBOOK_MAP.get(event_name)
     if not runbook_key:
@@ -49,19 +50,18 @@ def dispatcher(event, context):
         return respond(500, {'status': 'error', 'message': str(e)})
 
     # Execute playbook steps
-        # Execute playbook steps
-    results = execute_runbook(runbook, payload if 'body' in event and isinstance(event['body'], str) else event)
+    results = execute_runbook(runbook, event_data)
     audit_runbook(runbook_key, event, results)
     return respond(200, {'status': 'completed', 'results': results})
 
 
-def execute_runbook(steps, detail):
+def execute_runbook(steps, event_data):
     results = []
     for step in steps:
         name = step.get('name')
         action = step.get('action')
         raw_params = step.get('params', {})
-        params = substitute_params(raw_params, event)
+        params = substitute_params(raw_params, event_data)
 
         service, method = action.split('.', 1)
         client = boto3.client(service)
@@ -78,17 +78,21 @@ def execute_runbook(steps, detail):
     return results
 
 
-def substitute_params(obj, detail):
-    """Recursively replace {{ expr }} with values from detail."""
+def substitute_params(obj, event_data):
+    """Recursively replace {{ expr }} with values from event_data or environment variables."""
     if isinstance(obj, dict):
-        return {k: substitute_params(v, detail) for k, v in obj.items()}
+        return {k: substitute_params(v, event_data) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [substitute_params(v, detail) for v in obj]
+        return [substitute_params(v, event_data) for v in obj]
     if isinstance(obj, str):
         def repl(match):
             expr = match.group(1).strip()
             parts = expr.split('.')
-            val = detail
+            # Handle environment variables
+            if parts[0] == 'env' and len(parts) == 2:
+                return os.environ.get(parts[1], '')
+            # Lookup in event_data
+            val = event_data
             for p in parts:
                 val = val.get(p) if isinstance(val, dict) else None
                 if val is None:
